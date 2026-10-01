@@ -3,214 +3,284 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ESP32-DIV · Wi-Fi CSI Sensing</title>
+<title>Ruview · Wi-Fi Sensing</title>
 <style>
   :root{
-    --bg:#0d0f13; --panel:#161a21; --line:#232a35; --ink:#e8edf4;
-    --muted:#8b97a7; --accent:#ff8c1a; --ok:#37d67a; --bad:#ff4d5e;
+    --bg:#06080d; --bg2:#0a0e16; --panel:#0e131c; --panel2:#121926;
+    --line:#1b2433; --ink:#e9f1fb; --muted:#7c8aa0;
+    --cyan:#22d3ee; --blue:#38bdf8; --accent:#ff8c1a;
+    --ok:#34d399; --bad:#fb7185; --glow:rgba(34,211,238,.55);
   }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);
-    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-  header{padding:16px 20px;border-bottom:1px solid var(--line);
-    display:flex;align-items:center;gap:12px}
-  header h1{font-size:17px;margin:0;font-weight:650}
-  header .tag{color:var(--accent);font-weight:700}
-  #conn{margin-left:auto;font-size:13px;color:var(--muted)}
-  #conn.up{color:var(--ok)} #conn.down{color:var(--bad)}
-  main{max-width:960px;margin:0 auto;padding:20px;display:grid;gap:16px}
-  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-  .card h2{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
-  .big{font-size:40px;font-weight:700;line-height:1.1}
-  .unit{font-size:15px;color:var(--muted);font-weight:500}
-  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:650;font-size:14px}
-  .pill.yes{background:rgba(55,214,122,.15);color:var(--ok)}
-  .pill.no{background:rgba(139,151,167,.15);color:var(--muted)}
-  canvas{width:100%;display:block;border-radius:8px;background:#0a0c10}
-  .bars{display:flex;gap:10px;align-items:flex-end;height:90px;margin-top:6px}
-  .bar{flex:1;background:linear-gradient(180deg,var(--accent),#7a3d00);border-radius:6px 6px 0 0;transition:height .2s}
-  .bars .lbl{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
-  .zonewrap{display:flex;gap:10px}
-  .zonecol{flex:1;text-align:center}
-  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 2px}
-  input[type=range]{width:100%;accent-color:var(--accent)}
+  html,body{margin:0;height:100%}
+  body{background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(34,211,238,.08), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(255,140,26,.07), transparent 55%),
+      var(--bg);
+    color:var(--ink);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:16px 22px;
+    border-bottom:1px solid var(--line);backdrop-filter:blur(6px)}
+  .logo{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--cyan),var(--blue));color:#042; font-weight:900}
+  header h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.02em}
+  header h1 small{color:var(--muted);font-weight:500;font-size:12px}
+  #conn{margin-left:auto;font-size:12px;color:var(--muted);display:flex;align-items:center;gap:7px}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--muted);box-shadow:0 0 0 0 var(--glow)}
+  #conn.up .dot{background:var(--cyan);animation:pulse 1.6s infinite}
+  #conn.down .dot{background:var(--bad)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 var(--glow)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+  main{max-width:1120px;margin:0 auto;padding:18px;display:grid;gap:16px}
+  .grid{display:grid;gap:16px}
+  .cols{grid-template-columns:1.25fr .9fr}
+  @media(max-width:820px){.cols{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:16px;padding:16px;position:relative;overflow:hidden}
+  .card h2{margin:0 0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);font-weight:700}
+  .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+  .metric{background:var(--bg2);border:1px solid var(--line);border-radius:14px;padding:14px}
+  .metric .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+  .metric .v{font-size:30px;font-weight:800;line-height:1.15;margin-top:3px}
+  .metric .v small{font-size:13px;color:var(--muted);font-weight:600}
+  .metric.present .v{color:var(--muted)}
+  .metric.present.on{border-color:rgba(52,211,153,.5);box-shadow:0 0 24px -8px var(--ok)}
+  .metric.present.on .v{color:var(--ok)}
+  canvas{width:100%;display:block;border-radius:12px;background:#05070c}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--muted)}
+  .legend b{color:var(--ink);font-weight:600}
+  .warn{background:rgba(255,140,26,.1);border:1px solid rgba(255,140,26,.35);
+    border-radius:12px;padding:10px 14px;font-size:13px;color:#ffcaa0;display:none}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:0}
+  summary{cursor:pointer;padding:14px 16px;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--muted);font-weight:700;list-style:none}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"▸";float:right;transition:.2s}
+  details[open] summary::after{transform:rotate(90deg)}
+  .tune{padding:0 16px 16px}
+  label{display:block;font-size:12px;color:var(--muted);margin:12px 0 2px}
+  input[type=range]{width:100%;accent-color:var(--cyan)}
   .val{color:var(--ink);font-variant-numeric:tabular-nums}
-  button{background:var(--accent);color:#1a1000;border:0;border-radius:8px;
-    padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px}
+  .btns{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+  button{background:linear-gradient(135deg,var(--cyan),var(--blue));color:#042;border:0;
+    border-radius:10px;padding:10px 16px;font-weight:800;cursor:pointer;font-size:13px}
   button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
-  .note{font-size:12px;color:var(--muted);margin-top:8px}
-  .warn{background:rgba(255,140,26,.1);border:1px solid rgba(255,140,26,.3);
-    border-radius:8px;padding:10px 12px;font-size:13px;color:#ffcaa0}
-  footer{max-width:960px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px}
+  footer{max-width:1120px;margin:0 auto;padding:4px 22px 34px;color:var(--muted);font-size:11.5px}
 </style>
 </head>
 <body>
 <header>
-  <h1><span class="tag">ESP32-DIV</span> · Wi-Fi CSI Sensing</h1>
-  <span id="conn" class="down">connecting…</span>
+  <div class="logo">R</div>
+  <h1>Ruview <small>· Wi-Fi CSI Sensing</small></h1>
+  <div id="conn" class="down"><span class="dot"></span><span id="conntxt">connecting…</span></div>
 </header>
 
 <main>
-  <div id="calib" class="warn" style="display:none">
-    Calibrating baseline — keep the room <b>empty</b> for a few seconds.
+  <div id="calib" class="warn">⚙ Calibrating baseline — keep the room <b>empty</b> for a few seconds.</div>
+
+  <div class="metrics">
+    <div class="metric present" id="m_present"><div class="k">Presence</div><div class="v" id="presence">—</div></div>
+    <div class="metric"><div class="k">People (est.)</div><div class="v" id="count">0</div></div>
+    <div class="metric"><div class="k">Breathing</div><div class="v"><span id="bpm">0</span><small> bpm</small></div></div>
+    <div class="metric"><div class="k">Motion</div><div class="v" id="motion">0.00</div></div>
+    <div class="metric"><div class="k">Sample rate</div><div class="v"><span id="rate">0</span><small> Hz</small></div></div>
+    <div class="metric"><div class="k">Signal</div><div class="v"><span id="rssi">0</span><small> dBm</small></div></div>
   </div>
 
-  <div class="row">
+  <div class="grid cols">
     <div class="card">
-      <h2>Presence</h2>
-      <div><span id="presence" class="pill no">—</span></div>
-      <div class="note">RSSI <span id="rssi" class="val">–</span> dBm ·
-        <span id="rate" class="val">0</span> Hz ·
-        <span id="subs" class="val">0</span> subcarriers</div>
+      <h2>Room view · estimated activity zone</h2>
+      <canvas id="radar" height="300"></canvas>
+      <div class="legend">
+        <span><b>Blob</b> = where motion is strongest</span>
+        <span><b>Size</b> = motion intensity</span>
+        <span>Near ↔ Far is a <b>hint</b>, not exact position</span>
+      </div>
     </div>
     <div class="card">
-      <h2>People (estimate)</h2>
-      <div class="big" id="count">0</div>
-      <div class="note">single-link estimate · tune below</div>
+      <h2>Live motion timeline</h2>
+      <canvas id="wave" height="150"></canvas>
+      <div class="legend"><span><span id="subs">0</span> subcarriers · updated ~15×/s</span></div>
     </div>
-    <div class="card">
-      <h2>Breathing</h2>
-      <div class="big"><span id="bpm">0</span><span class="unit"> BPM</span></div>
-      <div class="note">0 = not confidently measurable</div>
-    </div>
-    <div class="card">
-      <h2>Motion energy</h2>
-      <div class="big" id="motion">0.00</div>
-      <div class="note">normalized channel variation</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Motion timeline</h2>
-    <canvas id="wave" height="140"></canvas>
   </div>
 
   <div class="card">
-    <h2>Coarse motion zones (near · mid · far — hint only)</h2>
-    <div class="bars">
-      <div class="zonecol"><div class="bar" id="z0" style="height:0"></div><div class="lbl">near</div></div>
-      <div class="zonecol"><div class="bar" id="z1" style="height:0"></div><div class="lbl">mid</div></div>
-      <div class="zonecol"><div class="bar" id="z2" style="height:0"></div><div class="lbl">far</div></div>
+    <h2>CSI waterfall · per-subcarrier channel change over time</h2>
+    <canvas id="fall" height="200"></canvas>
+    <div class="legend">
+      <span>Each column = one Wi-Fi subcarrier</span>
+      <span>Bright = big change (someone moving)</span>
+      <span>Dark = still</span>
     </div>
-    <div class="note">Two nodes cannot triangulate position. These are relative
-      motion-per-subcarrier-group hints, not floor-plan coordinates.</div>
   </div>
 
-  <div class="card">
-    <h2>Live tuning — fixes over/under counting &amp; false presence</h2>
-    <label>Presence ON threshold: <span id="presence_on_v" class="val"></span></label>
-    <input type="range" id="presence_on" min="0.05" max="1.5" step="0.01">
-    <label>Presence OFF threshold: <span id="presence_off_v" class="val"></span></label>
-    <input type="range" id="presence_off" min="0.02" max="1.2" step="0.01">
-    <label>Count threshold · 1 person: <span id="c0v" class="val"></span></label>
-    <input type="range" id="c0" min="0.05" max="1.5" step="0.01">
-    <label>Count threshold · 2 people: <span id="c1v" class="val"></span></label>
-    <input type="range" id="c1" min="0.1" max="2.5" step="0.01">
-    <label>Count threshold · 3+ people: <span id="c2v" class="val"></span></label>
-    <input type="range" id="c2" min="0.2" max="4.0" step="0.01">
-    <label>Count smoothing (anti-flicker): <span id="dedupv" class="val"></span></label>
-    <input type="range" id="dedup_smoothing" min="0.02" max="1.0" step="0.01">
-    <div style="margin-top:14px;display:flex;gap:10px">
-      <button id="recal">Recalibrate (empty room)</button>
-      <button class="ghost" id="reload">Reload config</button>
+  <details>
+    <summary>Live tuning — fix over/under counting &amp; false presence</summary>
+    <div class="tune">
+      <label>Presence ON threshold: <span id="presence_on_v" class="val"></span></label>
+      <input type="range" id="presence_on" min="0.05" max="1.5" step="0.01">
+      <label>Presence OFF threshold: <span id="presence_off_v" class="val"></span></label>
+      <input type="range" id="presence_off" min="0.02" max="1.2" step="0.01">
+      <label>Count · 1 person: <span id="c0v" class="val"></span></label>
+      <input type="range" id="c0" min="0.05" max="1.5" step="0.01">
+      <label>Count · 2 people: <span id="c1v" class="val"></span></label>
+      <input type="range" id="c1" min="0.1" max="2.5" step="0.01">
+      <label>Count · 3+ people: <span id="c2v" class="val"></span></label>
+      <input type="range" id="c2" min="0.2" max="4.0" step="0.01">
+      <label>Count smoothing (anti-flicker): <span id="dedupv" class="val"></span></label>
+      <input type="range" id="dedup_smoothing" min="0.02" max="1.0" step="0.01">
+      <div class="btns">
+        <button id="recal">Recalibrate (empty room)</button>
+        <button class="ghost" id="reload">Reload config</button>
+      </div>
     </div>
-    <div class="note">Changes apply instantly on the server. To fix a wrong
-      count: put the real number of people in the room, then slide the matching
-      count threshold until the readout matches. Recalibrate with the room empty
-      whenever you move the boards or furniture.</div>
-  </div>
+  </details>
 </main>
 
 <footer>
-  ruview-inspired · single TX→RX link · Presence &amp; breathing are reliable;
-  count is a tunable estimate and zones are hints. For true (x,y) localization
-  and robust multi-person counting, add more receiver nodes.
+  Ruview · single TX→RX link on 2 boards. Presence, motion &amp; breathing are reliable;
+  people-count is a tunable estimate and the room view is a motion hint, not true (x,y)
+  position. Real localization &amp; pose need 3+ receiver nodes.
 </footer>
 
 <script>
 const $ = id => document.getElementById(id);
-const conn = $("conn");
+const DPR = Math.max(1, window.devicePixelRatio || 1);
+function fit(c){ c.width = c.clientWidth*DPR; c.height = c.getAttribute("height")*DPR; }
+const radar=$("radar"), rx=radar.getContext("2d");
+const wave=$("wave"),  wx=wave.getContext("2d");
+const fall=$("fall"),  fx=fall.getContext("2d");
+function sizeAll(){ [radar,wave,fall].forEach(fit); }
+sizeAll(); addEventListener("resize", sizeAll);
 
-// ---------- motion timeline canvas ----------
-const cv = $("wave"), ctx = cv.getContext("2d");
-let hist = [];
-function sizeCanvas(){ cv.width = cv.clientWidth * devicePixelRatio;
-  cv.height = 140 * devicePixelRatio; }
-sizeCanvas(); addEventListener("resize", sizeCanvas);
+let hist=[];               // motion timeline
+let waterfall=[];          // array of spectrum rows
+let state=null;
+
+// ---------- radar / room view ----------
+function drawRadar(){
+  const w=radar.width,h=radar.height; rx.clearRect(0,0,w,h);
+  // room frame
+  rx.strokeStyle="#16202f"; rx.lineWidth=1*DPR;
+  for(let i=1;i<3;i++){ const y=h*i/3; rx.beginPath(); rx.moveTo(0,y); rx.lineTo(w,y); rx.stroke(); }
+  rx.strokeStyle="#223148"; rx.strokeRect(6*DPR,6*DPR,w-12*DPR,h-12*DPR);
+  // band labels
+  rx.fillStyle="#3a4a63"; rx.font=`${11*DPR}px sans-serif`;
+  rx.fillText("FAR",  10*DPR, 20*DPR);
+  rx.fillText("MID",  10*DPR, h/2);
+  rx.fillText("NEAR", 10*DPR, h-12*DPR);
+  if(!state) return;
+  const z=state.zones||[0,0,0];
+  const zmax=Math.max(1e-3,...z);
+  // highlight the strongest band
+  const bi=z.indexOf(Math.max(...z));
+  rx.fillStyle="rgba(34,211,238,0.06)";
+  rx.fillRect(6*DPR,(h/3)*bi+6*DPR,w-12*DPR,h/3-6*DPR);
+  // blob: y from near/mid/far (near=bottom), x centered, size from motion
+  const bandY=[h*0.82,h*0.5,h*0.18]; // near, mid, far  (zones index 0=near)
+  const y=bandY[bi];
+  const x=w*0.5;
+  const motion=state.present?(state.motion||0):0;
+  const r=(14+Math.min(motion,2)*46)*DPR;
+  const g=rx.createRadialGradient(x,y,2,x,y,r);
+  const a=state.present?0.9:0.15;
+  g.addColorStop(0,`rgba(34,211,238,${a})`);
+  g.addColorStop(0.5,`rgba(56,189,248,${a*0.4})`);
+  g.addColorStop(1,"rgba(56,189,248,0)");
+  rx.fillStyle=g; rx.beginPath(); rx.arc(x,y,r,0,7); rx.fill();
+  if(state.present){ rx.fillStyle="#eaffff"; rx.beginPath(); rx.arc(x,y,5*DPR,0,7); rx.fill(); }
+}
+
+// ---------- motion timeline ----------
 function drawWave(){
-  const w = cv.width, h = cv.height;
-  ctx.clearRect(0,0,w,h);
-  ctx.strokeStyle = "#232a35"; ctx.lineWidth = 1;
-  for(let i=1;i<4;i++){ const y=h*i/4; ctx.beginPath();
-    ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  const w=wave.width,h=wave.height; wx.clearRect(0,0,w,h);
+  wx.strokeStyle="#16202f"; wx.lineWidth=1*DPR;
+  for(let i=1;i<4;i++){const y=h*i/4;wx.beginPath();wx.moveTo(0,y);wx.lineTo(w,y);wx.stroke();}
   if(hist.length<2) return;
-  const max = 2.0;
-  ctx.beginPath(); ctx.strokeStyle = "#ff8c1a"; ctx.lineWidth = 2*devicePixelRatio;
-  hist.forEach((v,i)=>{ const x=w*i/(hist.length-1);
-    const y=h-Math.min(v/max,1)*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
-  ctx.stroke();
+  const max=2.0;
+  const grd=wx.createLinearGradient(0,0,0,h);
+  grd.addColorStop(0,"rgba(34,211,238,.35)"); grd.addColorStop(1,"rgba(34,211,238,0)");
+  wx.beginPath();
+  hist.forEach((v,i)=>{const x=w*i/(hist.length-1);const y=h-Math.min(v/max,1)*h;i?wx.lineTo(x,y):wx.moveTo(x,y);});
+  wx.lineTo(w,h); wx.lineTo(0,h); wx.closePath(); wx.fillStyle=grd; wx.fill();
+  wx.beginPath();
+  hist.forEach((v,i)=>{const x=w*i/(hist.length-1);const y=h-Math.min(v/max,1)*h;i?wx.lineTo(x,y):wx.moveTo(x,y);});
+  wx.strokeStyle="#22d3ee"; wx.lineWidth=2*DPR; wx.stroke();
+}
+
+// ---------- CSI waterfall ----------
+function color(v){ // 0..1 -> dark->cyan->white
+  v=Math.max(0,Math.min(1,v));
+  if(v<0.5){const t=v/0.5;return `rgb(${5+ t*10},${10+t*140},${20+t*170})`;}
+  const t=(v-0.5)/0.5;return `rgb(${15+t*225},${150+t*105},${190+t*65})`;
+}
+function drawFall(){
+  const w=fall.width,h=fall.height; fx.clearRect(0,0,w,h);
+  if(!waterfall.length) return;
+  const rows=waterfall.length, cols=waterfall[0].length||1;
+  const cw=w/cols, rh=h/Math.max(rows,1);
+  for(let r=0;r<rows;r++){
+    const row=waterfall[r];
+    for(let c=0;c<row.length;c++){
+      fx.fillStyle=color(row[c]/1.2);
+      fx.fillRect(c*cw, r*rh, cw+1, rh+1);
+    }
+  }
 }
 
 // ---------- websocket ----------
 let ws;
 function connect(){
-  ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/ws");
-  ws.onopen = ()=>{ conn.textContent="● live"; conn.className="up"; };
-  ws.onclose = ()=>{ conn.textContent="● disconnected — retrying"; conn.className="down";
-    setTimeout(connect,1500); };
-  ws.onmessage = e => render(JSON.parse(e.data));
+  ws=new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/ws");
+  ws.onopen=()=>{$("conn").className="up";$("conntxt").textContent="live";};
+  ws.onclose=()=>{$("conn").className="down";$("conntxt").textContent="disconnected — retrying";setTimeout(connect,1500);};
+  ws.onmessage=e=>{ state=JSON.parse(e.data); render(); };
 }
-function render(s){
-  $("calib").style.display = s.calibrating ? "block":"none";
-  const p = $("presence");
-  p.textContent = s.present ? "OCCUPIED":"empty";
-  p.className = "pill " + (s.present?"yes":"no");
-  $("count").textContent = s.count;
-  $("bpm").textContent = s.breathing_bpm ? s.breathing_bpm.toFixed(1):"0";
-  $("motion").textContent = s.motion.toFixed(2);
-  $("rssi").textContent = s.rssi;
-  $("rate").textContent = s.rate_hz;
-  $("subs").textContent = s.subcarriers;
-  const zmax = Math.max(0.01, ...s.zones);
-  s.zones.forEach((z,i)=> $("z"+i).style.height = (z/zmax*90)+"px");
-  hist.push(s.motion); if(hist.length>240) hist.shift();
-  drawWave();
+function render(){
+  const s=state;
+  $("calib").style.display=s.calibrating?"block":"none";
+  $("presence").textContent=s.present?"OCCUPIED":"empty";
+  $("m_present").classList.toggle("on",!!s.present);
+  $("count").textContent=s.count;
+  $("bpm").textContent=s.breathing_bpm?s.breathing_bpm.toFixed(1):"0";
+  $("motion").textContent=(s.motion||0).toFixed(2);
+  $("rate").textContent=s.rate_hz;
+  $("rssi").textContent=s.rssi;
+  $("subs").textContent=s.subcarriers;
+  hist.push(s.motion||0); if(hist.length>260) hist.shift();
+  if(s.spectrum&&s.spectrum.length){ waterfall.push(s.spectrum); if(waterfall.length>120) waterfall.shift(); }
+  drawRadar(); drawWave(); drawFall();
 }
 
 // ---------- config ----------
-const ranges = ["presence_on","presence_off","c0","c1","c2","dedup_smoothing"];
+const ids=["presence_on","presence_off","c0","c1","c2","dedup_smoothing"];
+const labelOf={presence_on:"presence_on_v",presence_off:"presence_off_v",c0:"c0v",c1:"c1v",c2:"c2v",dedup_smoothing:"dedupv"};
 async function loadConfig(){
-  const c = await (await fetch("/api/config")).json();
-  $("presence_on").value = c.presence_on; $("presence_on_v").textContent=c.presence_on;
-  $("presence_off").value = c.presence_off; $("presence_off_v").textContent=c.presence_off;
+  const c=await (await fetch("/api/config")).json();
+  $("presence_on").value=c.presence_on; $("presence_on_v").textContent=c.presence_on;
+  $("presence_off").value=c.presence_off; $("presence_off_v").textContent=c.presence_off;
   $("c0").value=c.count_thresholds[0]; $("c0v").textContent=c.count_thresholds[0];
   $("c1").value=c.count_thresholds[1]; $("c1v").textContent=c.count_thresholds[1];
   $("c2").value=c.count_thresholds[2]; $("c2v").textContent=c.count_thresholds[2];
   $("dedup_smoothing").value=c.dedup_smoothing; $("dedupv").textContent=c.dedup_smoothing;
 }
 async function pushConfig(){
-  const patch = {
-    presence_on: parseFloat($("presence_on").value),
-    presence_off: parseFloat($("presence_off").value),
-    dedup_smoothing: parseFloat($("dedup_smoothing").value),
-    count_thresholds: [parseFloat($("c0").value),parseFloat($("c1").value),parseFloat($("c2").value)]
-  };
   await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify(patch)});
+    body:JSON.stringify({
+      presence_on:parseFloat($("presence_on").value),
+      presence_off:parseFloat($("presence_off").value),
+      dedup_smoothing:parseFloat($("dedup_smoothing").value),
+      count_thresholds:[parseFloat($("c0").value),parseFloat($("c1").value),parseFloat($("c2").value)]
+    })});
 }
-ranges.forEach(id=>{
-  $(id).addEventListener("input", e=>{
-    const label = {presence_on:"presence_on_v",presence_off:"presence_off_v",
-      c0:"c0v",c1:"c1v",c2:"c2v",dedup_smoothing:"dedupv"}[id];
-    $(label).textContent = (+e.target.value).toFixed(2);
-  });
-  $(id).addEventListener("change", pushConfig);
+ids.forEach(id=>{
+  $(id).addEventListener("input",e=>{$(labelOf[id]).textContent=(+e.target.value).toFixed(2);});
+  $(id).addEventListener("change",pushConfig);
 });
-$("recal").onclick = async ()=>{ await fetch("/api/recalibrate",{method:"POST"}); };
-$("reload").onclick = loadConfig;
+$("recal").onclick=async()=>{await fetch("/api/recalibrate",{method:"POST"});};
+$("reload").onclick=loadConfig;
 
 loadConfig(); connect();
+setInterval(()=>{drawRadar();drawWave();drawFall();},1000); // keep canvases fresh if idle
 </script>
 </body>
 </html>
