@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ESP32-DIV · Wi-Fi CSI Sensing</title>
+<style>
+  :root{
+    --bg:#0d0f13; --panel:#161a21; --line:#232a35; --ink:#e8edf4;
+    --muted:#8b97a7; --accent:#ff8c1a; --ok:#37d67a; --bad:#ff4d5e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:16px 20px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px}
+  header h1{font-size:17px;margin:0;font-weight:650}
+  header .tag{color:var(--accent);font-weight:700}
+  #conn{margin-left:auto;font-size:13px;color:var(--muted)}
+  #conn.up{color:var(--ok)} #conn.down{color:var(--bad)}
+  main{max-width:960px;margin:0 auto;padding:20px;display:grid;gap:16px}
+  .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{margin:0 0 6px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .big{font-size:40px;font-weight:700;line-height:1.1}
+  .unit{font-size:15px;color:var(--muted);font-weight:500}
+  .pill{display:inline-block;padding:4px 10px;border-radius:999px;font-weight:650;font-size:14px}
+  .pill.yes{background:rgba(55,214,122,.15);color:var(--ok)}
+  .pill.no{background:rgba(139,151,167,.15);color:var(--muted)}
+  canvas{width:100%;display:block;border-radius:8px;background:#0a0c10}
+  .bars{display:flex;gap:10px;align-items:flex-end;height:90px;margin-top:6px}
+  .bar{flex:1;background:linear-gradient(180deg,var(--accent),#7a3d00);border-radius:6px 6px 0 0;transition:height .2s}
+  .bars .lbl{font-size:11px;color:var(--muted);text-align:center;margin-top:4px}
+  .zonewrap{display:flex;gap:10px}
+  .zonecol{flex:1;text-align:center}
+  label{display:block;font-size:13px;color:var(--muted);margin:10px 0 2px}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .val{color:var(--ink);font-variant-numeric:tabular-nums}
+  button{background:var(--accent);color:#1a1000;border:0;border-radius:8px;
+    padding:10px 14px;font-weight:700;cursor:pointer;font-size:14px}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .note{font-size:12px;color:var(--muted);margin-top:8px}
+  .warn{background:rgba(255,140,26,.1);border:1px solid rgba(255,140,26,.3);
+    border-radius:8px;padding:10px 12px;font-size:13px;color:#ffcaa0}
+  footer{max-width:960px;margin:0 auto;padding:0 20px 30px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="tag">ESP32-DIV</span> · Wi-Fi CSI Sensing</h1>
+  <span id="conn" class="down">connecting…</span>
+</header>
+
+<main>
+  <div id="calib" class="warn" style="display:none">
+    Calibrating baseline — keep the room <b>empty</b> for a few seconds.
+  </div>
+
+  <div class="row">
+    <div class="card">
+      <h2>Presence</h2>
+      <div><span id="presence" class="pill no">—</span></div>
+      <div class="note">RSSI <span id="rssi" class="val">–</span> dBm ·
+        <span id="rate" class="val">0</span> Hz ·
+        <span id="subs" class="val">0</span> subcarriers</div>
+    </div>
+    <div class="card">
+      <h2>People (estimate)</h2>
+      <div class="big" id="count">0</div>
+      <div class="note">single-link estimate · tune below</div>
+    </div>
+    <div class="card">
+      <h2>Breathing</h2>
+      <div class="big"><span id="bpm">0</span><span class="unit"> BPM</span></div>
+      <div class="note">0 = not confidently measurable</div>
+    </div>
+    <div class="card">
+      <h2>Motion energy</h2>
+      <div class="big" id="motion">0.00</div>
+      <div class="note">normalized channel variation</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Motion timeline</h2>
+    <canvas id="wave" height="140"></canvas>
+  </div>
+
+  <div class="card">
+    <h2>Coarse motion zones (near · mid · far — hint only)</h2>
+    <div class="bars">
+      <div class="zonecol"><div class="bar" id="z0" style="height:0"></div><div class="lbl">near</div></div>
+      <div class="zonecol"><div class="bar" id="z1" style="height:0"></div><div class="lbl">mid</div></div>
+      <div class="zonecol"><div class="bar" id="z2" style="height:0"></div><div class="lbl">far</div></div>
+    </div>
+    <div class="note">Two nodes cannot triangulate position. These are relative
+      motion-per-subcarrier-group hints, not floor-plan coordinates.</div>
+  </div>
+
+  <div class="card">
+    <h2>Live tuning — fixes over/under counting &amp; false presence</h2>
+    <label>Presence ON threshold: <span id="presence_on_v" class="val"></span></label>
+    <input type="range" id="presence_on" min="0.05" max="1.5" step="0.01">
+    <label>Presence OFF threshold: <span id="presence_off_v" class="val"></span></label>
+    <input type="range" id="presence_off" min="0.02" max="1.2" step="0.01">
+    <label>Count threshold · 1 person: <span id="c0v" class="val"></span></label>
+    <input type="range" id="c0" min="0.05" max="1.5" step="0.01">
+    <label>Count threshold · 2 people: <span id="c1v" class="val"></span></label>
+    <input type="range" id="c1" min="0.1" max="2.5" step="0.01">
+    <label>Count threshold · 3+ people: <span id="c2v" class="val"></span></label>
+    <input type="range" id="c2" min="0.2" max="4.0" step="0.01">
+    <label>Count smoothing (anti-flicker): <span id="dedupv" class="val"></span></label>
+    <input type="range" id="dedup_smoothing" min="0.02" max="1.0" step="0.01">
+    <div style="margin-top:14px;display:flex;gap:10px">
+      <button id="recal">Recalibrate (empty room)</button>
+      <button class="ghost" id="reload">Reload config</button>
+    </div>
+    <div class="note">Changes apply instantly on the server. To fix a wrong
+      count: put the real number of people in the room, then slide the matching
+      count threshold until the readout matches. Recalibrate with the room empty
+      whenever you move the boards or furniture.</div>
+  </div>
+</main>
+
+<footer>
+  ruview-inspired · single TX→RX link · Presence &amp; breathing are reliable;
+  count is a tunable estimate and zones are hints. For true (x,y) localization
+  and robust multi-person counting, add more receiver nodes.
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const conn = $("conn");
+
+// ---------- motion timeline canvas ----------
+const cv = $("wave"), ctx = cv.getContext("2d");
+let hist = [];
+function sizeCanvas(){ cv.width = cv.clientWidth * devicePixelRatio;
+  cv.height = 140 * devicePixelRatio; }
+sizeCanvas(); addEventListener("resize", sizeCanvas);
+function drawWave(){
+  const w = cv.width, h = cv.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle = "#232a35"; ctx.lineWidth = 1;
+  for(let i=1;i<4;i++){ const y=h*i/4; ctx.beginPath();
+    ctx.moveTo(0,y); ctx.lineTo(w,y); ctx.stroke(); }
+  if(hist.length<2) return;
+  const max = 2.0;
+  ctx.beginPath(); ctx.strokeStyle = "#ff8c1a"; ctx.lineWidth = 2*devicePixelRatio;
+  hist.forEach((v,i)=>{ const x=w*i/(hist.length-1);
+    const y=h-Math.min(v/max,1)*h; i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+}
+
+// ---------- websocket ----------
+let ws;
+function connect(){
+  ws = new WebSocket((location.protocol==="https:"?"wss":"ws")+"://"+location.host+"/ws");
+  ws.onopen = ()=>{ conn.textContent="● live"; conn.className="up"; };
+  ws.onclose = ()=>{ conn.textContent="● disconnected — retrying"; conn.className="down";
+    setTimeout(connect,1500); };
+  ws.onmessage = e => render(JSON.parse(e.data));
+}
+function render(s){
+  $("calib").style.display = s.calibrating ? "block":"none";
+  const p = $("presence");
+  p.textContent = s.present ? "OCCUPIED":"empty";
+  p.className = "pill " + (s.present?"yes":"no");
+  $("count").textContent = s.count;
+  $("bpm").textContent = s.breathing_bpm ? s.breathing_bpm.toFixed(1):"0";
+  $("motion").textContent = s.motion.toFixed(2);
+  $("rssi").textContent = s.rssi;
+  $("rate").textContent = s.rate_hz;
+  $("subs").textContent = s.subcarriers;
+  const zmax = Math.max(0.01, ...s.zones);
+  s.zones.forEach((z,i)=> $("z"+i).style.height = (z/zmax*90)+"px");
+  hist.push(s.motion); if(hist.length>240) hist.shift();
+  drawWave();
+}
+
+// ---------- config ----------
+const ranges = ["presence_on","presence_off","c0","c1","c2","dedup_smoothing"];
+async function loadConfig(){
+  const c = await (await fetch("/api/config")).json();
+  $("presence_on").value = c.presence_on; $("presence_on_v").textContent=c.presence_on;
+  $("presence_off").value = c.presence_off; $("presence_off_v").textContent=c.presence_off;
+  $("c0").value=c.count_thresholds[0]; $("c0v").textContent=c.count_thresholds[0];
+  $("c1").value=c.count_thresholds[1]; $("c1v").textContent=c.count_thresholds[1];
+  $("c2").value=c.count_thresholds[2]; $("c2v").textContent=c.count_thresholds[2];
+  $("dedup_smoothing").value=c.dedup_smoothing; $("dedupv").textContent=c.dedup_smoothing;
+}
+async function pushConfig(){
+  const patch = {
+    presence_on: parseFloat($("presence_on").value),
+    presence_off: parseFloat($("presence_off").value),
+    dedup_smoothing: parseFloat($("dedup_smoothing").value),
+    count_thresholds: [parseFloat($("c0").value),parseFloat($("c1").value),parseFloat($("c2").value)]
+  };
+  await fetch("/api/config",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify(patch)});
+}
+ranges.forEach(id=>{
+  $(id).addEventListener("input", e=>{
+    const label = {presence_on:"presence_on_v",presence_off:"presence_off_v",
+      c0:"c0v",c1:"c1v",c2:"c2v",dedup_smoothing:"dedupv"}[id];
+    $(label).textContent = (+e.target.value).toFixed(2);
+  });
+  $(id).addEventListener("change", pushConfig);
+});
+$("recal").onclick = async ()=>{ await fetch("/api/recalibrate",{method:"POST"}); };
+$("reload").onclick = loadConfig;
+
+loadConfig(); connect();
+</script>
+</body>
+</html>
