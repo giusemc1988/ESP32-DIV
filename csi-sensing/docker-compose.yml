@@ -1,0 +1,12 @@
+services:
+  csi-server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: csi-sensing
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # web dashboard + REST + websocket
+      - "5006:5006"   # CSI ingest (serial bridge or Wi-Fi RX connects here)
+    environment:
+      - CSI_INGEST_PORT=5006
