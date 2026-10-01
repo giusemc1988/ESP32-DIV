@@ -104,6 +104,7 @@ class CSIProcessor:
             "count": 0,           # estimated people (bucketed, see Config)
             "breathing_bpm": 0.0, # 0 when not confidently measurable
             "zones": [0.0, 0.0, 0.0],  # coarse near/mid/far motion hint
+            "spectrum": [],       # per-subcarrier normalized variation (for waterfall)
             "rssi": 0,
             "rate_hz": 0.0,       # actual CSI sample rate reaching the server
             "subcarriers": 0,
@@ -208,6 +209,7 @@ class CSIProcessor:
                 "count": count,
                 "breathing_bpm": round(bpm, 1),
                 "zones": [round(z, 4) for z in zones],
+                "spectrum": [round(float(x), 3) for x in norm],
                 "rssi": int(rec.get("rssi", 0)),
                 "rate_hz": round(self._rate, 1),
                 "subcarriers": int(amp.size),
